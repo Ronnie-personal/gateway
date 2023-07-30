@@ -119,7 +119,7 @@ run-e2e: prepare-e2e
 	kubectl wait --timeout=5m -n gateway-system job/gateway-api-admission --for=condition=Complete
 	kubectl apply -f test/config/gatewayclass.yaml
 
-	go test -v -tags e2e ./test/e2e --gateway-class=envoy-gateway --debug=true -run "RateLimitTest.block all ips"
+	go test -v -tags e2e ./test/e2e --gateway-class=envoy-gateway --debug=true -run "RateLimit"
 
 .PHONY: prepare-e2e
 prepare-e2e: prepare-helm-repo install-fluent-bit install-loki install-tempo install-otel-collector
