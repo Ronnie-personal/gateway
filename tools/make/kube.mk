@@ -118,7 +118,8 @@ run-e2e: prepare-e2e
 	kubectl wait --timeout=5m -n envoy-gateway-system deployment/envoy-gateway --for=condition=Available
 	kubectl wait --timeout=5m -n gateway-system job/gateway-api-admission --for=condition=Complete
 	kubectl apply -f test/config/gatewayclass.yaml
-	go test -v -tags e2e ./test/e2e --gateway-class=envoy-gateway --debug=true
+
+	go test -v -tags e2e ./test/e2e --gateway-class=envoy-gateway --debug=true -run "block all ips"
 
 .PHONY: prepare-e2e
 prepare-e2e: prepare-helm-repo install-fluent-bit install-loki install-tempo install-otel-collector
