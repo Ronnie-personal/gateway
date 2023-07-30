@@ -21,6 +21,7 @@ import (
 	"sigs.k8s.io/gateway-api/conformance/utils/suite"
 
 	egv1a1 "github.com/envoyproxy/gateway/api/v1alpha1"
+	v1beta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 )
 
 func init() {
@@ -81,7 +82,25 @@ var RateLimitTest = suite.ConformanceTest{
 
 			// Now you have the ratelimitfilter object in rateLimitFilter variable
 			// You can access its settings and print them
-			fmt.Printf("RateLimitFilter: %+v\n", rateLimitFilter)
+			fmt.Printf("RateLimitFilter: %+v\n", rateLimitFilter.Spec.Global.Rules)
+
+			httpRoute := &v1beta1.HTTPRoute{}
+			httpRouteKey := client.ObjectKey{Name: "http-ratelimit", Namespace: "gateway-conformance-infra"}
+			err = suite.Client.Get(context.Background(), httpRouteKey, httpRoute)
+			if err != nil {
+				panic(fmt.Sprintf("Failed to get HTTPRoute: %v", err))
+			}
+
+			// Now you have the HTTPRoute object in httpRoute variable
+			// You can access its filters field to check if it's using the RateLimitFilter
+			filters := httpRoute.Spec.Rules[0].Filters
+			for _, filter := range filters {
+				if filter.Type == "ExtensionRef" {
+					if filter.ExtensionRef.Name == "ratelimit-all-ips" {
+						fmt.Println("HTTPRoute is using the ratelimit-all-ips RateLimitFilter.")
+					}
+				}
+			}
 
 			// should just send exactly 4 requests, and expect 429
 
