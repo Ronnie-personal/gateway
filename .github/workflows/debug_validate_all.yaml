@@ -6,15 +6,11 @@ on:
       - DebugValidateAll1674  # Replace with your working branch name
     paths-ignore:
       - "**/*.png"
-    # Disable automatic triggering on push events
-    # This prevents the workflow from running on push to the specified branch
-    # It will only run when manually triggered using "workflow_dispatch"
- 
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'      
+    if: github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v3
       - uses: ./tools/github-actions/setup-deps
@@ -34,7 +30,7 @@ jobs:
     strategy:
       matrix:
         version: [ v1.26.3 ]
-    if: github.event_name == 'workflow_dispatch'  # Only run when manually     
+    if: github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v3
       - uses: ./tools/github-actions/setup-deps

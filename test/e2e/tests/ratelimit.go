@@ -9,13 +9,18 @@
 package tests
 
 import (
+	"context"
+	"fmt"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/gateway-api/conformance/utils/http"
 	"sigs.k8s.io/gateway-api/conformance/utils/kubernetes"
 	"sigs.k8s.io/gateway-api/conformance/utils/roundtripper"
 	"sigs.k8s.io/gateway-api/conformance/utils/suite"
+
+	egv1a1 "github.com/envoyproxy/gateway/api/v1alpha1"
 )
 
 func init() {
@@ -57,6 +62,26 @@ var RateLimitTest = suite.ConformanceTest{
 				Namespace: ns,
 			}
 			expectLimitReq := http.MakeRequest(t, &expectLimitResp, gwAddr, "HTTP", "http")
+
+			// check ratelimit resource
+			// Namespace where the ratelimitfilter is deployed
+			namespace := "gateway-conformance-infra"
+
+			// Name of the ratelimitfilter
+			name := "ratelimit-all-ips"
+
+			// Get the ratelimitfilter resource
+
+			rateLimitFilter := &egv1a1.RateLimitFilter{}
+			key := client.ObjectKey{Name: name, Namespace: namespace}
+			err := suite.Client.Get(context.Background(), key, rateLimitFilter)
+			if err != nil {
+				panic(fmt.Sprintf("Failed to get ratelimitfilter: %v", err))
+			}
+
+			// Now you have the ratelimitfilter object in rateLimitFilter variable
+			// You can access its settings and print them
+			fmt.Printf("RateLimitFilter: %+v\n", rateLimitFilter)
 
 			// should just send exactly 4 requests, and expect 429
 
