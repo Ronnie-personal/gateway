@@ -82,7 +82,7 @@ var RateLimitTest = suite.ConformanceTest{
 			}
 
 			// Save the JSON data to a file
-			err = ioutil.WriteFile("data.json", jsonData, 0644)
+			err = ioutil.WriteFile("configdump.json", jsonData, 0644)
 			if err != nil {
 				t.Errorf("Error writing JSON data to file: %v", err)
 
@@ -282,7 +282,7 @@ func getConfigDump(t *testing.T, config *rest.Config, c client.Client, namespace
 	serverURL, _ := url.Parse(portForwardURL)
 	ports := []string{fmt.Sprintf("%d:%d", localPort, remotePort)}
 
-	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, http.MethodPost, serverURL)
+	dialer := spdy.NewDialer(upgrader, &httpclient.Client{Transport: transport}, httpclient.MethodPost, serverURL)
 	stopCh := make(chan struct{}, 1)
 	readyCh := make(chan struct{})
 

@@ -58,5 +58,5 @@ jobs:
       - name: Upload config dump
         uses: actions/upload-artifact@v2
         with:
-          name: config-dump  # Name of the artifact
-          path: ./config_dump.json
+          name: configdump  # Name of the artifact
+          path: ./configdump.json
