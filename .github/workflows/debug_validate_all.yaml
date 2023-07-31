@@ -54,9 +54,9 @@ jobs:
         run: |
          make e2e
          mv envoy_proxy_logs.txt $GITHUB_WORKSPACE/envoy_proxy_logs.txt
-      # Add the "upload artifact" step here
+     # Add the "upload artifact" step here
       - name: Upload config dump
         uses: actions/upload-artifact@v2
         with:
           name: config-dump  # Name of the artifact
-          path: $GITHUB_WORKSPACE/artifacts/config_dump.json
+          path: ./config_dump.json

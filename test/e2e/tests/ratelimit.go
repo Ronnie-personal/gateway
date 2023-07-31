@@ -10,18 +10,27 @@ package tests
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/url"
+	"os"
 	"testing"
 
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/portforward"
+	"k8s.io/client-go/transport/spdy"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/gateway-api/conformance/utils/http"
 	"sigs.k8s.io/gateway-api/conformance/utils/kubernetes"
 	"sigs.k8s.io/gateway-api/conformance/utils/roundtripper"
 	"sigs.k8s.io/gateway-api/conformance/utils/suite"
 
-	egv1a1 "github.com/envoyproxy/gateway/api/v1alpha1"
-	v1beta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
+	httpclient "net/http"
+
+	corev1 "k8s.io/api/core/v1"
 )
 
 func init() {
@@ -64,43 +73,22 @@ var RateLimitTest = suite.ConformanceTest{
 			}
 			expectLimitReq := http.MakeRequest(t, &expectLimitResp, gwAddr, "HTTP", "http")
 
-			// check ratelimit resource
-			// Namespace where the ratelimitfilter is deployed
-			namespace := "gateway-conformance-infra"
-
-			// Name of the ratelimitfilter
-			name := "ratelimit-all-ips"
-
-			// Get the ratelimitfilter resource
-
-			rateLimitFilter := &egv1a1.RateLimitFilter{}
-			key := client.ObjectKey{Name: name, Namespace: namespace}
-			err := suite.Client.Get(context.Background(), key, rateLimitFilter)
+			// Get envoy proxy config dump
+			initialConfig, err := getConfigDump(t, suite.RestConfig, suite.Client, "envoy-gateway-system")
+			// Marshal the map into JSON format
+			jsonData, err := json.Marshal(initialConfig)
 			if err != nil {
-				panic(fmt.Sprintf("Failed to get ratelimitfilter: %v", err))
+				t.Errorf("Error marshaling data to JSON:", err)
 			}
 
-			// Now you have the ratelimitfilter object in rateLimitFilter variable
-			// You can access its settings and print them
-			fmt.Printf("RateLimitFilter: %+v\n", rateLimitFilter.Spec.Global.Rules)
-
-			httpRoute := &v1beta1.HTTPRoute{}
-			httpRouteKey := client.ObjectKey{Name: "http-ratelimit", Namespace: "gateway-conformance-infra"}
-			err = suite.Client.Get(context.Background(), httpRouteKey, httpRoute)
+			// Save the JSON data to a file
+			err = ioutil.WriteFile("data.json", jsonData, 0644)
 			if err != nil {
-				panic(fmt.Sprintf("Failed to get HTTPRoute: %v", err))
+				t.Errorf("Error writing JSON data to file: %v", err)
+
 			}
 
-			// Now you have the HTTPRoute object in httpRoute variable
-			// You can access its filters field to check if it's using the RateLimitFilter
-			filters := httpRoute.Spec.Rules[0].Filters
-			for _, filter := range filters {
-				if filter.Type == "ExtensionRef" {
-					if filter.ExtensionRef.Name == "ratelimit-all-ips" {
-						fmt.Println("HTTPRoute is using the ratelimit-all-ips RateLimitFilter.")
-					}
-				}
-			}
+			t.Log("Data saved to data.json")
 
 			// should just send exactly 4 requests, and expect 429
 
@@ -252,4 +240,96 @@ func GotExactNExpectedResponse(t *testing.T, n int, r roundtripper.RoundTripper,
 		}
 	}
 	return nil
+}
+
+func getConfigDump(t *testing.T, config *rest.Config, c client.Client, namespace string) (responseMap map[string]interface{}, err error) {
+	selectorLabels := map[string]string{
+		"gateway.envoyproxy.io/owning-gateway-name":      "all-namespaces",
+		"gateway.envoyproxy.io/owning-gateway-namespace": "gateway-conformance-infra",
+	}
+
+	// Create a new PodList to store the matching pods
+	podList := &corev1.PodList{}
+
+	// Build the ListOptions with the namespace and selectors
+	labelSelector := labels.SelectorFromSet(labels.Set(selectorLabels))
+	listOptions := &client.ListOptions{
+		Namespace:     namespace,
+		LabelSelector: labelSelector,
+	}
+
+	// List the pods using the ListOptions
+	err = c.List(context.TODO(), podList, listOptions)
+	if err != nil {
+		t.Log(err)
+		return nil, err
+	}
+
+	podName := podList.Items[0].Name
+
+	localPort := 19002
+	remotePort := 19000
+
+	transport, upgrader, err := spdy.RoundTripperFor(config)
+	if err != nil {
+		t.Log(err)
+		return nil, err
+	}
+
+	portForwardURL := fmt.Sprintf("/api/v1/namespaces/%s/pods/%s/portforward", namespace, podName)
+	portForwardURL = fmt.Sprintf("%v%s", config.Host, portForwardURL)
+
+	serverURL, _ := url.Parse(portForwardURL)
+	ports := []string{fmt.Sprintf("%d:%d", localPort, remotePort)}
+
+	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, http.MethodPost, serverURL)
+	stopCh := make(chan struct{}, 1)
+	readyCh := make(chan struct{})
+
+	// Create a port forwarder
+	portForwarder, err := portforward.New(dialer, ports, stopCh, readyCh, os.Stdout, os.Stderr)
+	if err != nil {
+		t.Log(err)
+		return nil, err
+	}
+
+	// Start port forwarding
+	go func() {
+		err := portForwarder.ForwardPorts()
+		if err != nil {
+			t.Log(err)
+		}
+	}()
+
+	// Wait until port forwarding is ready
+	<-readyCh
+
+	// Output the local address for accessing the forwarded port
+	fmt.Printf("Port forwarding started. Access the service locally at: localhost:%d\n", localPort)
+
+	// Perform an HTTP GET request to the forwarded port, reaches to envoy proxy admin
+	resp, err := httpclient.Get(fmt.Sprintf("http://127.0.0.1:%d/config_dump?include_eds", localPort))
+	if err != nil {
+		t.Log(err)
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	// Read the response body as a string
+	responseBody, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	// Unmarshal the response body into a map[string]interface{}
+	err = json.Unmarshal(responseBody, &responseMap)
+	if err != nil {
+		return nil, err
+	}
+
+	// Wait for termination signal
+	// <-stopCh
+
+	portForwarder.Close()
+	return responseMap, nil
 }
