@@ -119,7 +119,17 @@ run-e2e: prepare-e2e
 	kubectl wait --timeout=5m -n gateway-system job/gateway-api-admission --for=condition=Complete
 	kubectl apply -f test/config/gatewayclass.yaml
 
+    # Start capturing logs in the background
+
+
 	go test -v -tags e2e ./test/e2e --gateway-class=envoy-gateway --debug=true -run "TestE2E/RateLimit/block_all_ips"
+
+	export ENVOY_DEPLOYMENT=$$(kubectl get deploy -n envoy-gateway-system --selector=gateway.envoyproxy.io/owning-gateway-namespace=default,gateway.envoyproxy.io/owning-gateway-name=eg -o jsonpath='{.items[0].metadata.name}')
+	kubectl port-forward deploy/$$ENVOY_DEPLOYMENT -n envoy-gateway-system 19000:19000 &
+	sleep 5 # Give some time for port-forwarding to establish
+	curl -s http://127.0.0.1:19000/config_dump -o config_dump.json
+
+	kubectl get pods -n envoy-gateway-system -L app
 
 .PHONY: prepare-e2e
 prepare-e2e: prepare-helm-repo install-fluent-bit install-loki install-tempo install-otel-collector
