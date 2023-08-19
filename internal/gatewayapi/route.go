@@ -39,7 +39,7 @@ func (t *Translator) ProcessHTTPRoutes(httpRoutes []*v1beta1.HTTPRoute, gateways
 		}
 		httpRoute := &HTTPRouteContext{
 			GatewayControllerName: t.GatewayControllerName,
-			HTTPRoute:             h,
+			HTTPRoute:             h.DeepCopy(),
 		}
 
 		// Find out if this route attaches to one of our Gateway's listeners,
@@ -67,7 +67,7 @@ func (t *Translator) ProcessGRPCRoutes(grpcRoutes []*v1alpha2.GRPCRoute, gateway
 		}
 		grpcRoute := &GRPCRouteContext{
 			GatewayControllerName: t.GatewayControllerName,
-			GRPCRoute:             g,
+			GRPCRoute:             g.DeepCopy(),
 		}
 
 		// Find out if this route attaches to one of our Gateway's listeners,
@@ -488,31 +488,30 @@ func (t *Translator) processHTTPRouteParentRefListener(route RouteContext, route
 
 		var perHostRoutes []*ir.HTTPRoute
 		for _, host := range hosts {
-			var headerMatches []*ir.StringMatch
-
-			// If the intersecting host is more specific than the Listener's hostname,
-			// add an additional header match to all of the routes for it
-			if host != "*" && (listener.Hostname == nil || string(*listener.Hostname) != host) {
-				// Hostnames that are prefixed with a wildcard label (*.)
-				// are interpreted as a suffix match.
-				if strings.HasPrefix(host, "*.") {
-					headerMatches = append(headerMatches, &ir.StringMatch{
-						Name:   ":authority",
-						Suffix: StringPtr(host[2:]),
-					})
-				} else {
-					headerMatches = append(headerMatches, &ir.StringMatch{
-						Name:  ":authority",
-						Exact: StringPtr(host),
-					})
-				}
-			}
-
 			for _, routeRoute := range routeRoutes {
+				// If the redirect port is not set, the final redirect port must be derived.
+				if routeRoute.Redirect != nil && routeRoute.Redirect.Port == nil {
+					redirectPort := uint32(listener.Port)
+					// If redirect scheme is not-empty, the redirect post must be the
+					// well-known port associated with the redirect scheme.
+					if scheme := routeRoute.Redirect.Scheme; scheme != nil {
+						switch strings.ToLower(*scheme) {
+						case "http":
+							redirectPort = 80
+						case "https":
+							redirectPort = 443
+						}
+					}
+					// If the redirect scheme does not have a well-known port, or
+					// if the redirect scheme is empty, the redirect port must be the Gateway Listener port.
+					routeRoute.Redirect.Port = &redirectPort
+				}
+
 				hostRoute := &ir.HTTPRoute{
 					Name:                  fmt.Sprintf("%s-%s", routeRoute.Name, host),
+					Hostname:              host,
 					PathMatch:             routeRoute.PathMatch,
-					HeaderMatches:         append(headerMatches, routeRoute.HeaderMatches...),
+					HeaderMatches:         routeRoute.HeaderMatches,
 					QueryParamMatches:     routeRoute.QueryParamMatches,
 					AddRequestHeaders:     routeRoute.AddRequestHeaders,
 					RemoveRequestHeaders:  routeRoute.RemoveRequestHeaders,
@@ -563,7 +562,7 @@ func (t *Translator) ProcessTLSRoutes(tlsRoutes []*v1alpha2.TLSRoute, gateways [
 		}
 		tlsRoute := &TLSRouteContext{
 			GatewayControllerName: t.GatewayControllerName,
-			TLSRoute:              tls,
+			TLSRoute:              tls.DeepCopy(),
 		}
 
 		// Find out if this route attaches to one of our Gateway's listeners,
@@ -685,7 +684,7 @@ func (t *Translator) ProcessUDPRoutes(udpRoutes []*v1alpha2.UDPRoute, gateways [
 		}
 		udpRoute := &UDPRouteContext{
 			GatewayControllerName: t.GatewayControllerName,
-			UDPRoute:              u,
+			UDPRoute:              u.DeepCopy(),
 		}
 
 		// Find out if this route attaches to one of our Gateway's listeners,
@@ -817,7 +816,7 @@ func (t *Translator) ProcessTCPRoutes(tcpRoutes []*v1alpha2.TCPRoute, gateways [
 		}
 		tcpRoute := &TCPRouteContext{
 			GatewayControllerName: t.GatewayControllerName,
-			TCPRoute:              tcp,
+			TCPRoute:              tcp.DeepCopy(),
 		}
 
 		// Find out if this route attaches to one of our Gateway's listeners,

@@ -117,6 +117,8 @@ func buildJwtAuthn(irListener *ir.HTTPListener) (*jwtauthnv3.JwtAuthentication, 
 							Timeout: &durationpb.Duration{Seconds: 5},
 						},
 						CacheDuration: &durationpb.Duration{Seconds: 5 * 60},
+						AsyncFetch:    &jwtauthnv3.JwksAsyncFetch{},
+						RetryPolicy:   &corev3.RetryPolicy{},
 					},
 				}
 
@@ -338,13 +340,15 @@ func createJwksClusters(tCtx *types.ResourceVersionTable, routes []*ir.HTTPRoute
 					if err != nil {
 						return err
 					}
-					addXdsCluster(tCtx, addXdsClusterArgs{
+					if err := addXdsCluster(tCtx, addXdsClusterArgs{
 						name:         jwks.name,
 						destinations: routeDestinations,
 						tSocket:      tSocket,
 						protocol:     DefaultProtocol,
 						endpoint:     ep,
-					})
+					}); err != nil {
+						return err
+					}
 				}
 			}
 		}

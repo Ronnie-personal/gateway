@@ -16,6 +16,7 @@ require (
 	github.com/google/go-cmp v0.5.9
 	github.com/grafana/tempo v1.5.0
 	github.com/pkg/errors v0.9.1
+	github.com/prometheus/common v0.44.0
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.4
@@ -23,9 +24,9 @@ require (
 	github.com/tetratelabs/multierror v1.1.1
 	github.com/tsaarni/certyaml v0.9.2
 	go.opentelemetry.io/proto/otlp v1.0.0
-	go.uber.org/zap v1.24.0
+	go.uber.org/zap v1.25.0
 	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e
-	google.golang.org/grpc v1.56.2
+	google.golang.org/grpc v1.57.0
 	google.golang.org/protobuf v1.31.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.27.4
@@ -35,8 +36,8 @@ require (
 	k8s.io/client-go v0.27.4
 	k8s.io/kubectl v0.27.4
 	k8s.io/utils v0.0.0-20230209194617-a36077c30491
-	sigs.k8s.io/controller-runtime v0.15.0
-	sigs.k8s.io/gateway-api v0.7.1
+	sigs.k8s.io/controller-runtime v0.15.1
+	sigs.k8s.io/gateway-api v0.8.0-rc1
 	sigs.k8s.io/yaml v1.3.0
 )
 
@@ -85,15 +86,13 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_golang v1.15.1 // indirect
 	github.com/prometheus/client_model v0.4.0 // indirect
-	github.com/prometheus/common v0.42.0 // indirect
 	github.com/prometheus/procfs v0.9.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect
 	github.com/tsaarni/x500dn v1.0.0 // indirect
 	github.com/xlab/treeprint v1.1.0 // indirect
 	go.starlark.net v0.0.0-20200306205701-8dd3e2ee1dd5 // indirect
-	go.uber.org/atomic v1.9.0 // indirect
-	go.uber.org/multierr v1.8.0 // indirect
+	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/net v0.10.0 // indirect
 	golang.org/x/oauth2 v0.8.0 // indirect
 	golang.org/x/sys v0.8.0 // indirect

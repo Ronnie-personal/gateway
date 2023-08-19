@@ -8,8 +8,10 @@ package ir
 import (
 	"errors"
 	"net"
+	"reflect"
 
 	"github.com/tetratelabs/multierror"
+	"golang.org/x/exp/slices"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -28,6 +30,7 @@ var (
 	ErrTLSServerCertEmpty            = errors.New("field ServerCertificate must be specified")
 	ErrTLSPrivateKey                 = errors.New("field PrivateKey must be specified")
 	ErrHTTPRouteNameEmpty            = errors.New("field Name must be specified")
+	ErrHTTPRouteHostnameEmpty        = errors.New("field Hostname must be specified")
 	ErrHTTPRouteMatchEmpty           = errors.New("either PathMatch, HeaderMatches or QueryParamMatches fields must be specified")
 	ErrRouteDestinationHostInvalid   = errors.New("field Address must be a valid IP address")
 	ErrRouteDestinationPortInvalid   = errors.New("field Port specified is invalid")
@@ -58,9 +61,36 @@ type Xds struct {
 	TCP []*TCPListener `json:"tcp,omitempty" yaml:"tcp,omitempty"`
 	// UDP Listeners exposed by the gateway.
 	UDP []*UDPListener `json:"udp,omitempty" yaml:"udp,omitempty"`
-	// JSONPatches are the JSON Patches that
-	// are to be applied to generaed Xds linked to the gateway.
-	JSONPatches []*JSONPatchConfig `json:"jsonPatches,omitempty" yaml:"jsonPatches,omitempty"`
+	// EnvoyPatchPolicies is the intermediate representation of the EnvoyPatchPolicy resource
+	EnvoyPatchPolicies []*EnvoyPatchPolicy `json:"envoyPatchPolicies,omitempty" yaml:"envoyPatchPolicies,omitempty"`
+}
+
+// Equal implements the Comparable interface used by watchable.DeepEqual to skip unnecessary updates.
+func (x *Xds) Equal(y *Xds) bool {
+	// Deep copy to avoid modifying the original ordering.
+	x = x.DeepCopy()
+	x.sort()
+	y = y.DeepCopy()
+	y.sort()
+	return reflect.DeepEqual(x, y)
+}
+
+// sort ensures the listeners are in a consistent order.
+func (x *Xds) sort() {
+	slices.SortFunc(x.HTTP, func(l1, l2 *HTTPListener) bool {
+		return l1.Name < l2.Name
+	})
+	for _, l := range x.HTTP {
+		slices.SortFunc(l.Routes, func(r1, r2 *HTTPRoute) bool {
+			return r1.Name < r2.Name
+		})
+	}
+	slices.SortFunc(x.TCP, func(l1, l2 *TCPListener) bool {
+		return l1.Name < l2.Name
+	})
+	slices.SortFunc(x.UDP, func(l1, l2 *UDPListener) bool {
+		return l1.Name < l2.Name
+	})
 }
 
 // Validate the fields within the Xds structure.
@@ -207,6 +237,8 @@ type BackendWeights struct {
 type HTTPRoute struct {
 	// Name of the HTTPRoute
 	Name string `json:"name" yaml:"name"`
+	// Hostname that the route matches against
+	Hostname string `json:"hostname" yaml:"hostname,omitempty"`
 	// PathMatch defines the match conditions on the path.
 	PathMatch *StringMatch `json:"pathMatch,omitempty" yaml:"pathMatch,omitempty"`
 	// HeaderMatches define the match conditions on the request headers for this route.
@@ -276,6 +308,9 @@ func (h HTTPRoute) Validate() error {
 	var errs error
 	if h.Name == "" {
 		errs = multierror.Append(errs, ErrHTTPRouteNameEmpty)
+	}
+	if h.Hostname == "" {
+		errs = multierror.Append(errs, ErrHTTPRouteHostnameEmpty)
 	}
 	if h.PathMatch == nil && (len(h.HeaderMatches) == 0) && (len(h.QueryParamMatches) == 0) {
 		errs = multierror.Append(errs, ErrHTTPRouteMatchEmpty)
@@ -798,6 +833,24 @@ type OpenTelemetryAccessLog struct {
 	Host       string            `json:"host" yaml:"host"`
 	Port       uint32            `json:"port" yaml:"port"`
 	Resources  map[string]string `json:"resources,omitempty" yaml:"resources,omitempty"`
+}
+
+// EnvoyPatchPolicy defines the intermediate representation of the EnvoyPatchPolicy resource.
+// +k8s:deepcopy-gen=true
+type EnvoyPatchPolicy struct {
+	EnvoyPatchPolicyStatus
+	// JSONPatches are the JSON Patches that
+	// are to be applied to generaed Xds linked to the gateway.
+	JSONPatches []*JSONPatchConfig `json:"jsonPatches,omitempty" yaml:"jsonPatches,omitempty"`
+}
+
+// EnvoyPatchPolicyStatus defines the status reference for the EnvoyPatchPolicy resource
+// +k8s:deepcopy-gen=true
+type EnvoyPatchPolicyStatus struct {
+	Name      string `json:"name,omitempty" yaml:"name"`
+	Namespace string `json:"namespace,omitempty" yaml:"namespace"`
+	// Status of the EnvoyPatchPolicy
+	Status *egv1a1.EnvoyPatchPolicyStatus `json:"status,omitempty" yaml:"status,omitempty"`
 }
 
 // JSONPatchConfig defines the configuration for patching a Envoy xDS Resource

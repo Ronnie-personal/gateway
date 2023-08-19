@@ -38,6 +38,10 @@ xds:
         staticResources:
           clusters:
           - connectTimeout: 10s
+            http2ProtocolOptions:
+              connectionKeepalive:
+                interval: 30s
+                timeout: 5s
             loadAssignment:
               clusterName: xds_cluster
               endpoints:
@@ -194,10 +198,3 @@ xds:
           '@type': type.googleapis.com/envoy.config.route.v3.RouteConfiguration
           ignorePortInHostMatching: true
           name: default/eg/http
-          virtualHosts:
-          - domains:
-            - '*'
-            name: default/eg/http
-            rateLimits:
-            - actions:
-              - remoteAddress: {}

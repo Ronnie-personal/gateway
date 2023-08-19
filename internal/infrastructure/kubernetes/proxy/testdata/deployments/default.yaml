@@ -7,7 +7,7 @@ metadata:
     app.kubernetes.io/managed-by: envoy-gateway
     gateway.envoyproxy.io/owning-gateway-name: default
     gateway.envoyproxy.io/owning-gateway-namespace: default
-  name: envoy-default-64656661
+  name: envoy-default-37a8eec1
   namespace: envoy-gateway-system
 spec:
   replicas: 1
@@ -105,6 +105,10 @@ spec:
                         http2_protocol_options: {}
                   name: xds_cluster
                   type: STRICT_DNS
+                  http2_protocol_options:
+                    connection_keepalive:
+                      interval: 30s
+                      timeout: 5s
                   transport_socket:
                     name: envoy.transport_sockets.tls
                     typed_config:
@@ -133,6 +137,7 @@ spec:
                       resource_api_version: V3
                     name: runtime-0
             - --log-level warn
+            - --cpuset-threads
           command:
             - envoy
           env:
@@ -164,6 +169,11 @@ spec:
             httpGet:
               path: /ready
               port: 19001
+              scheme: HTTP
+            timeoutSeconds: 1
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
           terminationMessagePath: /dev/termination-log
           terminationMessagePolicy: File
           volumeMounts:
@@ -175,12 +185,13 @@ spec:
       dnsPolicy: ClusterFirst
       restartPolicy: Always
       schedulerName: default-scheduler
-      serviceAccountName: envoy-default-64656661
+      serviceAccountName: envoy-default-37a8eec1
       terminationGracePeriodSeconds: 300
       volumes:
         - name: certs
           secret:
             secretName: envoy
+            defaultMode: 420
         - configMap:
             defaultMode: 420
             items:
@@ -188,6 +199,8 @@ spec:
                 path: xds-trusted-ca.json
               - key: xds-certificate.json
                 path: xds-certificate.json
-            name: envoy-default-64656661
+            name: envoy-default-37a8eec1
             optional: false
           name: sds
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 600
