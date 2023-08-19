@@ -1,0 +1,62 @@
+name: E2E Test
+on:
+  workflow_dispatch:  # Manually trigger the workflow
+  push:
+    branches:
+      - e2ereload1503nosort  # Replace with your working branch name
+    paths-ignore:
+      - "**/*.png"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./tools/github-actions/setup-deps
+
+      - name: Build EG Multiarch Binaries
+        run: make build-multiarch PLATFORMS="linux_amd64 linux_arm64"
+
+      - name: Upload EG Binaries
+        uses: actions/upload-artifact@v3
+        with:
+          name: envoy-gateway
+          path: bin/
+
+  e2e-test:
+    needs: [build]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        version: [ v1.26.3 ]
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./tools/github-actions/setup-deps
+
+      - name: Download EG Binaries
+        uses: actions/download-artifact@v3
+        with:
+          name: envoy-gateway
+          path: bin/
+
+      - name: Give Privileges To EG Binaries
+        run: |
+          chmod +x bin/linux/amd64/envoy-gateway
+          chmod +x bin/linux/arm64/envoy-gateway
+
+      # E2E
+      - name: Run E2E Tests
+        env:
+          KIND_NODE_TAG: ${{ matrix.version }}
+          IMAGE_PULL_POLICY: IfNotPresent
+        run: |
+         make e2e
+         mv envoy_proxy_logs.txt $GITHUB_WORKSPACE/envoy_proxy_logs.txt
+     # Add the "upload artifact" step here
+      - name: Upload config dump
+        uses: actions/upload-artifact@v2
+        with:
+          name: configdump  # Name of the artifact
+          path: ./configdump.json
